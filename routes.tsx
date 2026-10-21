@@ -1,4 +1,4 @@
-import { createHashRouter, LoaderFunctionArgs } from "react-router-dom";
+import { createHashRouter, LoaderFunctionArgs, Navigate } from "react-router-dom";
 import { NotFound } from "./src/pages/app/404";
 import { Home } from "./src/pages/app/Home";
 import { AppLayout } from "./src/pages/layout/app";
@@ -10,6 +10,9 @@ import SubfolderDetailsPage from "./src/pages/app/SubfolderDetailsPage";
 import ManageFolderPage from "./src/pages/app/ManageFolderPage";
 import CreateItemPage from "./src/pages/app/CreateItemPage";
 import ManuaisPage from "./src/pages/app/ManuaisPage";
+import SignIn from "./src/pages/auth/Sign-in";
+import ManageSystemsPage from "./src/pages/admin/ManageSystemsPage";
+import { PrivateRoute } from "./src/components/auth/PrivateRoute";
 
 const futureFlags = {
   v7_startTransition: true,
@@ -23,16 +26,33 @@ const futureFlags = {
 export const Router = createHashRouter(
   [
     {
+      path: "/login",
+      element: <SignIn />,
+      errorElement: <NotFound />,
+    },
+    {
       path: "/",
       element: <AppLayout />,
       errorElement: <NotFound />,
       children: [
         { path: "", element: <Home /> }, // Home page na rota raiz
+        { path: "home", element: <Home /> },
         { path: "bancodeteses", element: <HomeBancoPareceres /> },
         { path: "pcta", element: <HomePcta /> },
-        { path: "home", element: <Home /> },
         { path: "manuais", element: <ManuaisPage /> },
         { path: "ramais", element: <RamaisPage /> },
+        {
+          path: "admin/sistemas",
+          element: (
+            <PrivateRoute>
+              <ManageSystemsPage />
+            </PrivateRoute>
+          ),
+        },
+        {
+          path: "admin",
+          element: <Navigate to="/admin/sistemas" replace />,
+        },
         {
           path: "folder/:folderId",
           element: <FolderDetailsPage />,
