@@ -1,28 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "react-router-dom";
-import logo from '@/assets/logo.svg'
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import logo from "@/assets/logo.svg";
+import { useAuth } from "@/Context/AuthContext";
+import { ArrowLeft, Lock, ShieldCheck, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
-// --- Ícones como componentes React para um visual mais limpo ---
-const Eye = (props:any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const EyeOff = (props:any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-    <line x1="2" x2="22" y1="2" y2="22" />
-  </svg>
-);
-
-// --- Esquema de validação e tipos (sem alterações) ---
 const loginSchema = z.object({
   username: z.string().min(1, "O nome de usuário é obrigatório."),
   password: z.string().min(1, "A senha é obrigatória."),
@@ -30,164 +15,242 @@ const loginSchema = z.object({
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
-type LoginResponse = { token: string };
 
+interface LocationState {
+  from?: {
+    pathname?: string;
+  };
+}
 
-// --- Componente principal da página de login ---
-export default function App() {
+export default function SignIn() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
+  // Se já estiver logado, redireciona para a área administrativa
+  useEffect(() => {
+    if (isAuthenticated) {
+      const state = location.state as LocationState | null;
+      const from = state?.from?.pathname || "/admin/sistemas";
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { username: "", password: "", remember: false },
+    defaultValues: { username: "admin", password: "", remember: true },
   });
 
-  
-
-  // --- Função de submissão com a chamada real à API ---
   async function onSubmit(values: LoginForm) {
     setError(null);
     setLoading(true);
 
     try {
-      const res = await fetch("http://10.96.0.67/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: values.username, password: values.password }),
-      });
+      const result = await login(values.username, values.password, values.remember);
 
-      if (!res.ok) {
-        let text;
-        try {
-          // Tenta extrair uma mensagem de erro do corpo da resposta
-          const errorData = await res.json();
-          text = errorData.message || `Erro HTTP ${res.status}`;
-        } catch {
-          text = `Erro HTTP ${res.status}`;
-        }
-        throw new Error(text);
-      }
-
-      const data: LoginResponse = await res.json();
-
-      // Salvar token
-      if (values.remember) {
-        localStorage.setItem("auth_token", data.token);
+      if (!result.success) {
+        setError(result.message || "Credenciais inválidas.");
       } else {
-        sessionStorage.setItem("auth_token", data.token);
+        const state = location.state as LocationState | null;
+        const from = state?.from?.pathname || "/admin/sistemas";
+        navigate(from, { replace: true });
       }
-
-      // Redirecionar para home
-      navigate("/app/home");
-
-    } catch (err: any) {
-      setError(err?.message ?? "Ocorreu um erro desconhecido. Verifique a conexão.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Ocorreu um erro inesperado ao autenticar.";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen w-full lg:grid lg:grid-cols-2 bg-slate-50 font-sans">
-      {/* Coluna da Esquerda: Branding e Informações */}
-      <div className="hidden bg-gradient-to-br from-blue-900 to-slate-900 lg:flex flex-col items-center justify-center p-12 text-white">
-        <div className="w-full max-w-md text-center">
-            <img className="h-20 w-20 mx-auto mb-6" src={logo} alt="Logo" />            
-            <h1 className="text-4xl font-bold tracking-tight">
-                Intranet PGE-PA
-            </h1>
-            <p className="mt-4 text-lg text-slate-300">
-                Acesso exclusivo para servidores e colaboradores da Procuradoria-Geral do Estado do Pará.
-            </p>
-            <div className="mt-10 border-t border-slate-700 pt-6 text-sm text-slate-400">
-                <p>Para suporte técnico, entre em contato com o setor de TI.</p>
-                <p className="mt-2">© {new Date().getFullYear()} PGE-PA - Todos os direitos reservados.</p>
-            </div>
-        </div>
-      </div>
+    <>
+      <Helmet title="Login Administrativo" />
+      <div className="min-h-screen w-full lg:grid lg:grid-cols-2 bg-slate-50 font-sans">
+        {/* Coluna da Esquerda: Branding Institucional */}
+        <div className="hidden bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 lg:flex flex-col items-center justify-between p-12 text-white relative overflow-hidden">
+          {/* Efeitos de fundo animados */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl opacity-10 animate-pulse pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-screen filter blur-3xl opacity-10 animate-pulse pointer-events-none" />
 
-      {/* Coluna da Direita: Formulário de Login */}
-      <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="w-full max-w-md space-y-8">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-              Login
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Utilize suas credenciais de rede (AD).
-            </p>
+          {/* Topo: Voltar */}
+          <div className="w-full flex justify-start z-10">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Portal Público
+            </Link>
           </div>
 
-          <div className="bg-white p-8 shadow-xl rounded-2xl">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {error && (
-                <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 border border-red-200">
-                  <p className="font-semibold">Erro de Autenticação</p>
-                  <p>{error}</p>
-                </div>
-              )}
+          {/* Centro: Logo e Mensagem */}
+          <div className="w-full max-w-md text-center z-10 py-12">
+            <div className="relative inline-block mb-6">
+              <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-30 animate-pulse" />
+              <img className="relative h-24 w-24 mx-auto drop-shadow-2xl" src={logo} alt="Logo PGE-PA" />
+            </div>
 
-              {/* Campo de Usuário */}
-              <div className="space-y-2">
-                <label htmlFor="username" className="text-sm font-medium text-gray-700">
-                  Usuário
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  placeholder="usuario de rede PGE"
-                  {...register("username")}
-                  autoComplete="username"
-                  className={`w-full px-4 py-2 border ${errors.username ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out`}
-                />
-                {errors.username && <p className="text-sm text-red-600">{errors.username.message}</p>}
-              </div>
+            <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blue-200 via-white to-purple-200 bg-clip-text text-transparent">
+              Portal PGE-PA
+            </h1>
+            <p className="mt-2 text-sm font-semibold uppercase tracking-widest text-blue-400">
+              Painel de Controle Administrativo
+            </p>
 
-              {/* Campo de Senha */}
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Senha
-                </label>
-                <div className="relative">
-                  <input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Sua senha de rede"
-                    {...register("password")}
-                    autoComplete="current-password"
-                    className={`w-full px-4 py-2 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-                {errors.password && <p className="text-sm text-red-600">{errors.password.message}</p>}
-              </div>
+            <p className="mt-6 text-slate-300 leading-relaxed text-sm">
+              Área exclusiva para administradores da Diretoria de Tecnologia da Informação e Governança Digital (DTIGD).
+              Gerencie os sistemas e links exibidos na página inicial.
+            </p>
 
-              
-
-              {/* Botão de Entrar */}
+            <div className="mt-8 p-4 rounded-xl bg-white/5 border border-white/10 text-left text-xs text-slate-300 flex items-start gap-3 backdrop-blur-sm">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               <div>
+                <p className="font-semibold text-white">Acesso Restrito</p>
+                <p className="text-slate-400 mt-1">
+                  Usuário padrão: <strong className="text-blue-300">admin</strong> | Senha padrão: <strong className="text-blue-300">admin</strong> (ou <strong className="text-blue-300">admin123</strong>)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Rodapé institucional */}
+          <div className="w-full text-center text-xs text-slate-400 z-10">
+            © {new Date().getFullYear()} Procuradoria-Geral do Estado do Pará - DTIGD
+          </div>
+        </div>
+
+        {/* Coluna da Direita: Formulário de Login */}
+        <div className="flex flex-col justify-center items-center py-12 px-6 sm:px-12 lg:px-16 bg-slate-50 relative">
+          {/* Link voltar para mobile */}
+          <div className="w-full max-w-md lg:hidden mb-6 flex justify-start">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar ao Portal
+            </Link>
+          </div>
+
+          <div className="w-full max-w-md space-y-8">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 mb-4 shadow-sm">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                Autenticação de Administrador
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Entre com suas credenciais para gerenciar os sistemas do portal.
+              </p>
+            </div>
+
+            <div className="bg-white p-8 shadow-xl shadow-slate-200/60 rounded-3xl border border-slate-100">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                {error && (
+                  <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700 border border-red-200 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Acesso Negado</p>
+                      <p className="mt-0.5">{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Usuário */}
+                <div className="space-y-1.5">
+                  <label htmlFor="username" className="text-sm font-semibold text-slate-700">
+                    Usuário Administrador
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    placeholder="admin"
+                    {...register("username")}
+                    autoComplete="username"
+                    className={`w-full px-4 py-2.5 rounded-xl border ${
+                      errors.username ? "border-red-500" : "border-slate-300"
+                    } text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+                  />
+                  {errors.username && (
+                    <p className="text-xs text-red-600 font-medium">{errors.username.message}</p>
+                  )}
+                </div>
+
+                {/* Senha */}
+                <div className="space-y-1.5">
+                  <label htmlFor="password" className="text-sm font-semibold text-slate-700">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      {...register("password")}
+                      autoComplete="current-password"
+                      className={`w-full px-4 py-2.5 pr-11 rounded-xl border ${
+                        errors.password ? "border-red-500" : "border-slate-300"
+                      } text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600"
+                      aria-label={showPassword ? "Ocultar senha" : "Exibir senha"}
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-xs text-red-600 font-medium">{errors.password.message}</p>
+                  )}
+                </div>
+
+                {/* Lembrar-me */}
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+                    <input
+                      type="checkbox"
+                      {...register("remember")}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                    />
+                    <span>Manter conectado neste navegador</span>
+                  </label>
+                </div>
+
+                {/* Botão Entrar */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 transition-all duration-200 transform active:scale-[0.99]"
                 >
-                  {loading ? "Verificando..." : "Entrar"}
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Verificando credenciais...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-5 h-5" />
+                      <span>Entrar no Painel</span>
+                    </>
+                  )}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
